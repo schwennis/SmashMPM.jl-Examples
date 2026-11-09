@@ -15,7 +15,6 @@ T = Float64 # Backend independent precision, has to be Float64 to conserve energ
 if backend_to_use === :cuda
     println("Using CUDA backend...")
     using CUDA  # Import CUDA only if using CUDABackend
-    CUDA.set_runtime_version!(local_toolkit=true)   # true if local CUDA toolkit is installed, false if using system CUDA
     CUDA.allowscalar(false)
     BACKEND = CUDABackend()
 else
@@ -30,20 +29,20 @@ end
 # ---------------------------------------------------------------------------- #
 #                               Impact Parameters                              #
 # ---------------------------------------------------------------------------- #
-const IMPACT_VELOCITY = 3.2e3 # m/s
-const IMPACT_PARAMETER = 0    # Impact parameter (0 = head-on, 1 = grazing)
-const SPHERE_RADIUS = 7e-3
+const IMPACT_VELOCITY = 3.2e3   # m/s
+const IMPACT_ANGLE = 30.0       # degrees, between velocity and surface normal (0 = head-on)
+const PROJECTILE_RADIUS = 3.5e-3
+const TARGET_RADIUS = 30e-3
 
 
 # ---------------------------------------------------------------------------- #
 #                             Simulation Parameters                            #
 # ---------------------------------------------------------------------------- #
-const DX = T(1e-3)
-const INITIAL_SEPARATION = 2.0 * SPHERE_RADIUS + 2*DX
-time_to_collision = (INITIAL_SEPARATION - 2 * SPHERE_RADIUS) / IMPACT_VELOCITY
-const T_MAX = T(time_to_collision + 100e-6)  # Run simulation for thrice the time to collision
+const DX = T(0.8e-3)
+const GAP = 2 * DX
+const T_MAX = T(GAP / IMPACT_VELOCITY + 12e-6)
 const PPC_1D = 2
-const cfl_number = T(0.4)
+const cfl_number = T(0.2)
 const DT_MAX = T(1e-3)
 const DOMAIN = OpenDomain()
 
@@ -51,62 +50,50 @@ const DOMAIN = OpenDomain()
 # ---------------------------------------------------------------------------- #
 #                                Export Settings                               #
 # ---------------------------------------------------------------------------- #
-NR_EXPORTS = 100 
+NR_EXPORTS = 60
 
 
 # ---------------------------------------------------------------------------- #
 #                               Sphere Materials                               #
 # ---------------------------------------------------------------------------- #
-ρ_nylon = T(1180.0) # kg/m^3
-mu_nylon = T(219e6 / (2 * (1 + 0.45)))
-nylon_eos = TillotsonEOS{T}(
-    ρ_nylon,
-    T(10.1e9),   # A   (Pa)
-    T(33.8e9),   # B   (Pa)
-    T(10.0),     # α
-    T(5.0),      # β
-    T(7.0e6),    # E0  (J/kg)
-    T(2.0e6),    # Eiv (J/kg)
-    T(2.4e6),    # Ecv (J/kg)
-    T(0.6),      # a
-    T(2.0),      # b
-)
-nylon_elasticity = HyperElasticity{T}(mu_nylon)
-nylon_plasticity = J2Plasticity(σ_y0=3.5e9, H=5.31e6)
-nylon_damage = NoDamage()
+const TARGET_MATERIAL = Basalt(T, eos=:tillotson, elasticity=:hypoelastic, damage=:grady_kipp,
+                               plasticity=J2Plasticity(σ_y0=T(3.5e9), H=T(5.31e6)),
+                               viscosity=BulkViscosity{T}(c_lin=0.3))
 
-const SPHERE1_MATERIAL = SolidMaterial(; eos=nylon_eos, elasticity=nylon_elasticity, plasticity=nylon_plasticity, damage=nylon_damage)
-
-const SPHERE2_MATERIAL = Basalt(T, eos=:tillotson, elasticity=:hypoelastic, damage=:grady_kipp)
+const PROJECTILE_MATERIAL = Nylon(T, eos=:tillotson, elasticity=:hypoelastic,
+                                  plasticity=J2Plasticity(σ_y0=T(10e6), H=T(2.19e6)),
+                                  viscosity=BulkViscosity{T}(c_lin=0.3))
 
 # ---------------------------------------------------------------------------- #
 #                               Sphere Parameters                              #
 # ---------------------------------------------------------------------------- #
-const SPHERE1_POSITION = SVector{3, T}(-INITIAL_SEPARATION/2, 0.0, 0.0)
-const SPHERE1_VELOCITY = SVector{3, T}(IMPACT_VELOCITY/2, 0.0, 0.0)
+const TARGET_POSITION = zero(SVector{3, T})
+const TARGET_VELOCITY = zero(SVector{3, T})
 
-const SPHERE2_POSITION = SVector{3, T}(INITIAL_SEPARATION/2, IMPACT_PARAMETER * 2 * SPHERE_RADIUS, 0.0)
-const SPHERE2_VELOCITY = SVector{3, T}(-IMPACT_VELOCITY/2, 0.0, 0.0)
+const CONTACT_DISTANCE = TARGET_RADIUS + PROJECTILE_RADIUS
+const PROJECTILE_POSITION = SVector{3, T}(-CONTACT_DISTANCE * cosd(IMPACT_ANGLE) - GAP,
+                                          CONTACT_DISTANCE * sind(IMPACT_ANGLE), 0.0)
+const PROJECTILE_VELOCITY = SVector{3, T}(IMPACT_VELOCITY, 0.0, 0.0)
 
 
 
 # ---------------------------------------------------------------------------- #
-#                                 Crate Spheres                                #
+#                                 Create Bodies                                #
 # ---------------------------------------------------------------------------- #
 println("Setting up simulation...")
 
-sphere1_shape = Sphere{T}(SPHERE_RADIUS, SPHERE1_POSITION)
-sphere2_shape = Sphere{T}(SPHERE_RADIUS, SPHERE2_POSITION)
+target_shape     = Sphere{T}(TARGET_RADIUS, TARGET_POSITION)
+projectile_shape = Sphere{T}(PROJECTILE_RADIUS, PROJECTILE_POSITION)
 
-sphere1_body = Body(sphere1_shape, SPHERE1_VELOCITY, zero(SVector{3, T}), SPHERE1_MATERIAL)
-sphere2_body = Body(sphere2_shape, SPHERE2_VELOCITY, zero(SVector{3, T}), SPHERE2_MATERIAL)
+target_body     = Body(target_shape, TARGET_VELOCITY, zero(SVector{3, T}), TARGET_MATERIAL)
+projectile_body = Body(projectile_shape, PROJECTILE_VELOCITY, zero(SVector{3, T}), PROJECTILE_MATERIAL)
 
-bodies = (sphere1_body, sphere2_body)
+bodies = (target_body, projectile_body)   # target first: particle set id 1 in the export
 
 
 exporter = HDF5Exporter(
     output_dir="output",
-    filename_prefix = "colliding_spheres_",
+    filename_prefix = "nakamura_fujiwara_",
     write_xdmf = true,
     compression_level = 3,
     export_particles = true,

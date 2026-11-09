@@ -35,4 +35,7 @@ JuliaLocalPreferences.toml
 # Simulation output files
 *.h5
 *.xmf
+*.csv
+*.err
+*.out
 
