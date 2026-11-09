@@ -11,7 +11,7 @@ using Glob
 #   P      = Σ m v
 #   L      = Σ m x × v  +  Σ m D (C₃₂ - C₂₃, C₁₃ - C₃₁, C₂₁ - C₁₂)
 #   E_kin  = ½ Σ m |v|²  +  ½ Σ m D ‖C‖²_F
-const DX = 1e-3   # only used if the file has no grid/dx
+const DX = parse(Float64, get(ARGS, 2, "1.6e-3"))   # grid spacing, only used if the file has no grid/dx
 
 struct Moments
     mass::Float64

@@ -38,11 +38,11 @@ const TARGET_RADIUS = 30e-3
 # ---------------------------------------------------------------------------- #
 #                             Simulation Parameters                            #
 # ---------------------------------------------------------------------------- #
-const DX = T(0.8e-3)
+const DX = T(1.6e-3)
 const GAP = 2 * DX
-const T_MAX = T(GAP / IMPACT_VELOCITY + 12e-6)
+const T_MAX = T(GAP / IMPACT_VELOCITY + 10e-6)
 const PPC_1D = 2
-const cfl_number = T(0.2)
+const cfl_number = T(0.4)
 const DT_MAX = T(1e-3)
 const DOMAIN = OpenDomain()
 
@@ -50,7 +50,7 @@ const DOMAIN = OpenDomain()
 # ---------------------------------------------------------------------------- #
 #                                Export Settings                               #
 # ---------------------------------------------------------------------------- #
-NR_EXPORTS = 60
+NR_EXPORTS = 100 
 
 
 # ---------------------------------------------------------------------------- #
@@ -58,11 +58,11 @@ NR_EXPORTS = 60
 # ---------------------------------------------------------------------------- #
 const TARGET_MATERIAL = Basalt(T, eos=:tillotson, elasticity=:hypoelastic, damage=:grady_kipp,
                                plasticity=J2Plasticity(σ_y0=T(3.5e9), H=T(5.31e6)),
-                               viscosity=BulkViscosity{T}(c_lin=0.3))
+                               viscosity=BulkViscosity{T}())
 
 const PROJECTILE_MATERIAL = Nylon(T, eos=:tillotson, elasticity=:hypoelastic,
                                   plasticity=J2Plasticity(σ_y0=T(10e6), H=T(2.19e6)),
-                                  viscosity=BulkViscosity{T}(c_lin=0.3))
+                                  viscosity=BulkViscosity{T}())
 
 # ---------------------------------------------------------------------------- #
 #                               Sphere Parameters                              #
@@ -112,6 +112,7 @@ sim_setup = SimulationSetup(
     ppc_1d=PPC_1D,
     exporter=exporter,
     export_time_interval=T_MAX/NR_EXPORTS,
+    track_dissipation=true,
     backend=BACKEND,
     boundary_condition=boundary_condition
 )

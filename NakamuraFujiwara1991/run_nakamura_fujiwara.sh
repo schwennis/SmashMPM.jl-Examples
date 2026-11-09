@@ -40,11 +40,12 @@ set -e
 echo "Simulation beendet mit Exit-Code ${sim_status}"
 
 # Läuft auch nach einem Crash, um den letzten Zustand zu untersuchen
-"${julia_cmd[@]}" check_particles.jl
+# "${julia_cmd[@]}" check_particles.jl
 
 if [ "${sim_status}" -eq 0 ]; then
-    "${julia_cmd[@]}" fragment_analysis.jl
-    "${julia_cmd[@]}" conservation_check.jl
+    # "${julia_cmd[@]}" fragment_analysis.jl
+    "${julia_cmd[@]}" conservation_check.jl output
+    "${julia_cmd[@]}" compare_dissipaton.jl output
 fi
 
 
